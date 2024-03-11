@@ -173,7 +173,7 @@ def train_and_report(model_name: str, sub_pipeline: ClassifierMixin, hyperparame
     ], memory=memory,
         verbose=True)
 
-    search = GridSearchCV(pipe, param_grid=param_grid, n_jobs=-1, cv=3, verbose=10, refit=True)
+    search = GridSearchCV(pipe, param_grid=param_grid, n_jobs=12, cv=3, verbose=10, refit=True)
     results = search.fit(X_train, y_train)
     
     df = pd.DataFrame(results.cv_results_)
