@@ -1,8 +1,14 @@
 import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, auc, roc_curve
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.decomposition import PCA, KernelPCA, LatentDirichletAllocation, FastICA, NMF, TruncatedSVD
 
 
 def get_data(split_train: bool = False):
@@ -112,3 +118,70 @@ def report_data(model_name: str, y, y_test, y_pred, y_pred_proba, classes):
     plot_roc_curve()
 
     print("Done saving data!")
+
+
+def train_and_report(model_name: str, sub_pipeline: Pipeline, hyperparameters: dict = None):
+    """
+    Train and report the model
+
+    Courtesy of https://scikit-learn.org/stable/tutorial/statistical_inference/putting_together.html
+    https://stackoverflow.com/a/76639090
+    https://scikit-learn.org/stable/auto_examples/compose/plot_compare_reduction.html
+
+    :param model_name: String representation of model on charts. E.g. 'Random Forest', "Logistic Regression"
+    :param sub_pipeline: An instance of a scikit-learn pipeline
+    :param hyperparameters: Hyperparameters to search over. The model
+    :return:
+    """
+
+    X_train, X_test, y_train, y_test, y = get_data()
+
+    # Define column names for categorical and numeric columns
+    columns_to_drop = ['CustomerId']
+    categorical_columns = ['Gender', 'Geography']
+    numeric_columns = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'HasCrCard', 'IsActiveMember',
+                       'EstimatedSalary']
+
+    # Create the column preprocessor
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('ohe', OneHotEncoder(categories='auto'), categorical_columns),
+            ('std_scaler', StandardScaler(), numeric_columns)
+        ])
+
+    # dim_reduction = [, LatentDirichletAllocation(), FastICA(), TruncatedSVD(), 'passthrough']
+
+    param_grid = {
+        **hyperparameters,
+        "pca__n_components": [2, 5, 8, 10, 15, 'mle'],
+        "pca__whiten": [True, False],
+        "pca__svd_solver": ['auto', 'full', 'arpack', 'randomized'],
+    }
+
+    # Create the pipeline
+    pipe = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        # Populated by param grid
+        ('reduce_dim', 'passthrough'),
+        ('model', sub_pipeline),
+    ])
+
+    search = GridSearchCV(pipe, param_grid=param_grid, n_jobs=-1, cv=5, verbose=1, refit=True, )
+    search.fit(X_train, y_train)
+
+    print('=========================================[Best Hyperparameters info]=====================================')
+    print(search.best_params_)
+
+    # summarize best
+    print('Best MAE: %.3f' % search.best_score_)
+    print('Best Config: %s' % search.best_params_)
+    print('==========================================================================================================')
+
+    print("Best parameter (CV score=%0.3f):" % search.best_score_)
+    print(search.best_params_)
+
+    # Fit the pipeline to the data
+    search.fit(X_train, y_train)
+
+    report_data(model_name, y, y_test, search.predict(X_test), search.predict_proba(X_test), search.classes_)
+    print("Done training and reporting!")
