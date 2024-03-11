@@ -1,0 +1,2 @@
+model__max_depth,model__min_samples_leaf,model__min_samples_split,model__n_estimators,reduce_dim,reduce_dim__n_components
+10,1,10,300,PCA(),mle

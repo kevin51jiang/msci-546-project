@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.base import ClassifierMixin
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, auc, roc_curve
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import ConfusionMatrixDisplay
@@ -9,7 +10,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.decomposition import PCA, KernelPCA, LatentDirichletAllocation, FastICA, NMF, TruncatedSVD
+from shutil import rmtree
+from joblib import Memory
 
+from joblib import dump
 
 def get_data(split_train: bool = False):
     df = pd.read_csv('data/train.csv')
@@ -47,7 +51,7 @@ def report_data(model_name: str, y, y_test, y_pred, y_pred_proba, classes):
                                            display_labels=classes)
         conf_plot.plot()
         plt.savefig(f'report/image/confusion_matrix_{model_name}.png')
-        plt.show()
+        # plt.show()
 
         # Save the confusion matrix to a file
         df = pd.DataFrame(conf_matrix)
@@ -120,7 +124,7 @@ def report_data(model_name: str, y, y_test, y_pred, y_pred_proba, classes):
     print("Done saving data!")
 
 
-def train_and_report(model_name: str, sub_pipeline: Pipeline, hyperparameters: dict = None):
+def train_and_report(model_name: str, sub_pipeline: ClassifierMixin, hyperparameters: dict = None):
     """
     Train and report the model
 
@@ -133,7 +137,8 @@ def train_and_report(model_name: str, sub_pipeline: Pipeline, hyperparameters: d
     :param hyperparameters: Hyperparameters to search over. The model
     :return:
     """
-
+    location = 'cachedir'
+    memory = Memory(location, verbose=10)
     X_train, X_test, y_train, y_test, y = get_data()
 
     # Define column names for categorical and numeric columns
@@ -151,12 +156,13 @@ def train_and_report(model_name: str, sub_pipeline: Pipeline, hyperparameters: d
 
     # dim_reduction = [, LatentDirichletAllocation(), FastICA(), TruncatedSVD(), 'passthrough']
 
-    param_grid = {
+    param_grid = [
+        {
         **hyperparameters,
-        "pca__n_components": [2, 5, 8, 10, 15, 'mle'],
-        "pca__whiten": [True, False],
-        "pca__svd_solver": ['auto', 'full', 'arpack', 'randomized'],
-    }
+        "reduce_dim": [PCA(), LatentDirichletAllocation()],
+        "reduce_dim__n_components": [5, 10, 'mle'],
+    }, 
+    ]
 
     # Create the pipeline
     pipe = Pipeline(steps=[
@@ -164,24 +170,38 @@ def train_and_report(model_name: str, sub_pipeline: Pipeline, hyperparameters: d
         # Populated by param grid
         ('reduce_dim', 'passthrough'),
         ('model', sub_pipeline),
-    ])
+    ], memory=memory,
+        verbose=True)
 
-    search = GridSearchCV(pipe, param_grid=param_grid, n_jobs=-1, cv=5, verbose=1, refit=True, )
-    search.fit(X_train, y_train)
+    search = GridSearchCV(pipe, param_grid=param_grid, n_jobs=-1, cv=3, verbose=10, refit=True)
+    results = search.fit(X_train, y_train)
+    
+    df = pd.DataFrame(results.cv_results_)
+    df.to_csv(f'report/text/cv_results_{model_name}.csv', index=False)
+
+    # Save the best model
+    dump(search, f'models/{model_name}.joblib')
+    # Export the best model parameters to a file
+    df = pd.DataFrame(search.best_params_, index=[0])
+    df.to_csv(f'report/text/best_params_{model_name}.csv', index=False)
+
+    memory.clear(warn=False)
+    rmtree(location)
+
 
     print('=========================================[Best Hyperparameters info]=====================================')
     print(search.best_params_)
-
+    
     # summarize best
     print('Best MAE: %.3f' % search.best_score_)
     print('Best Config: %s' % search.best_params_)
     print('==========================================================================================================')
-
+    
     print("Best parameter (CV score=%0.3f):" % search.best_score_)
+
     print(search.best_params_)
-
-    # Fit the pipeline to the data
-    search.fit(X_train, y_train)
-
+    
     report_data(model_name, y, y_test, search.predict(X_test), search.predict_proba(X_test), search.classes_)
     print("Done training and reporting!")
+
+    return results
