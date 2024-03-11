@@ -1,0 +1,2 @@
+model__activation,model__alpha,model__hidden_layer_sizes,model__learning_rate,model__max_iter,model__solver,reduce_dim,reduce_dim__n_components
+tanh,0.01,8,constant,1000,adam,PCA(),mle
