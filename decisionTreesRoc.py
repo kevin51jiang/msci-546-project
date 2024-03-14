@@ -5,7 +5,7 @@ import importlib
 
 importlib.reload(utils)
 
-res = utils.train_and_report(
+res = utils.train_and_report_roc(
     "Decision Tree ROC",
     DecisionTreeClassifier(),
     {
