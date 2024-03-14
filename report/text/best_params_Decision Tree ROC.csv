@@ -1,0 +1,2 @@
+model__criterion,model__max_depth,model__min_samples_split,model__splitter,reduce_dim,reduce_dim__n_components
+gini,7,4,best,PCA(),mle

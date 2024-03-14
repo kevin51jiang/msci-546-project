@@ -6,7 +6,10 @@ from sklearn.metrics import (
     confusion_matrix,
     auc,
     roc_curve,
+    make_scorer,
 )
+
+
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
@@ -207,8 +210,16 @@ def train_and_report(
         verbose=True,
     )
 
+    roc_scorer = make_scorer(roc_auc_score, response_method="predict_proba")
+
     search = GridSearchCV(
-        pipe, param_grid=param_grid, n_jobs=12, cv=3, verbose=10, refit=True
+        pipe,
+        param_grid=param_grid,
+        n_jobs=12,
+        cv=3,
+        verbose=10,
+        refit=True,
+        scoring=roc_scorer,
     )
     results = search.fit(X_train, y_train)
 
