@@ -375,3 +375,125 @@ def train_and_report_roc(
     print("Done training and reporting!")
 
     return results
+
+
+
+def train_and_report_roc_and_feature_select(
+    model_name: str, sub_pipeline: ClassifierMixin, hyperparameters: dict = None
+):
+    """
+    Train and report the model
+
+    Courtesy of https://scikit-learn.org/stable/tutorial/statistical_inference/putting_together.html
+    https://stackoverflow.com/a/76639090
+    https://scikit-learn.org/stable/auto_examples/compose/plot_compare_reduction.html
+
+    :param model_name: String representation of model on charts. E.g. 'Random Forest', "Logistic Regression"
+    :param sub_pipeline: An instance of a scikit-learn pipeline
+    :param hyperparameters: Hyperparameters to search over. The model
+    :return:
+    """
+    location = "cachedir"
+    memory = Memory(location, verbose=10)
+    X_train, X_test, y_train, y_test, y = get_data()
+
+    # Define column names for categorical and numeric columns
+    columns_to_drop = ["CustomerId"]
+    # Ignore ones with <0.1 correlation
+    categorical_columns = ["Gender", "Geography"]
+    numeric_columns = [
+        # "CreditScore",
+        "Age",
+        # "Tenure",
+        "Balance",
+        "NumOfProducts",
+        # "HasCrCard",
+        "IsActiveMember",
+        # "EstimatedSalary",
+    ]
+
+    # Create the column preprocessor
+    preprocessor = ColumnTransformer(
+        remainder='drop',
+        transformers=[
+            ("ohe", OneHotEncoder(categories="auto"), categorical_columns),
+            ("std_scaler", StandardScaler(), numeric_columns),
+        ]
+    )
+
+    # dim_reduction = [, LatentDirichletAllocation(), FastICA(), TruncatedSVD(), 'passthrough']
+
+    param_grid = [
+        {
+            "reduce_dim": [PCA(), LatentDirichletAllocation()],
+            "reduce_dim__n_components": [5, 10, "mle"],
+            **hyperparameters,
+        },
+    ]
+
+    # Create the pipeline
+    pipe = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            # Populated by param grid
+            ("reduce_dim", "passthrough"),
+            ("model", sub_pipeline),
+        ],
+        memory=memory,
+        verbose=True,
+    )
+
+    roc_scorer = make_scorer(roc_auc_score, response_method="predict_proba")
+
+    search = GridSearchCV(
+        pipe,
+        param_grid=param_grid,
+        n_jobs=16,
+        cv=3,
+        verbose=10,
+        refit=True,
+        scoring=roc_scorer,
+    )
+    results = search.fit(X_train, y_train)
+
+    df = pd.DataFrame(results.cv_results_)
+    df.to_csv(f"report/text/cv_results_{model_name}.csv", index=False)
+
+    # Save the best model
+    dump(search, f"models/{model_name}.joblib")
+
+    print("Best params", search.best_params_)
+    # Export the best model parameters to a file
+    df = pd.DataFrame(search.best_params_, index=[0])
+    df.to_csv(f"report/text/best_params_{model_name}.csv", index=False)
+
+    memory.clear(warn=False)
+    rmtree(location)
+
+    print(
+        "=========================================[Best Hyperparameters info]====================================="
+    )
+    print(search.best_params_)
+
+    # summarize best
+    print("Best MAE: %.3f" % search.best_score_)
+    print("Best Config: %s" % search.best_params_)
+    print(
+        "=========================================================================================================="
+    )
+
+    print("Best parameter (CV score=%0.3f):" % search.best_score_)
+
+    print(search.best_params_)
+
+    report_data(
+        model_name,
+        y,
+        y_test,
+        search.predict(X_test),
+        search.predict_proba(X_test),
+        search.classes_,
+    )
+    print("Done training and reporting!")
+
+    return results

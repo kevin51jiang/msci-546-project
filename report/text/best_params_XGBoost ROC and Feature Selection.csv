@@ -1,0 +1,2 @@
+model__learning_rate,model__max_depth,model__sampling_method,model__tree_method,reduce_dim,reduce_dim__n_components
+0.2,3,uniform,exact,PCA(),mle
