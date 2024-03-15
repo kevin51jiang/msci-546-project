@@ -29,7 +29,7 @@ from sklearn.decomposition import (
 from shutil import rmtree
 from joblib import Memory
 
-from joblib import dump
+from joblib import dump, load
 
 
 def get_data(split_train: bool = False):
@@ -145,6 +145,18 @@ def report_data(model_name: str, y, y_test, y_pred, y_pred_proba, classes):
     plot_roc_curve()
 
     print("Done saving data!")
+
+def load_joblib_and_report(model_name: str):
+    X_train, X_test, y_train, y_test, y = get_data()
+    search = load(f"models/{model_name}.joblib")
+    report_data(
+        model_name,
+        y,
+        y_test,
+        search.predict(X_test),
+        search.predict_proba(X_test),
+        search.classes_,
+    )
 
 
 def train_and_report(
@@ -460,7 +472,7 @@ def train_and_report_roc_and_feature_select(
     df.to_csv(f"report/text/cv_results_{model_name}.csv", index=False)
 
     # Save the best model
-    dump(search, f"models/{model_name}.joblib")
+    dump(search, f"mo dels/{model_name}.joblib")
 
     print("Best params", search.best_params_)
     # Export the best model parameters to a file
